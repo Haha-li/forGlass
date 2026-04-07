@@ -1,0 +1,33 @@
+{
+  "stock": {
+    "width": 3660,
+    "height": 2440
+  },
+  "options": {
+    "kerf": 5,
+    "edgeMargin": 10
+  },
+  "pieces": [
+    {
+      "id": "A",
+      "width": 1200,
+      "height": 800,
+      "quantity": 3,
+      "canRotate": true
+    },
+    {
+      "id": "B",
+      "width": 900,
+      "height": 600,
+      "quantity": 4,
+      "canRotate": true
+    },
+    {
+      "id": "C",
+      "width": 500,
+      "height": 400,
+      "quantity": 6,
+      "canRotate": true
+    }
+  ]
+}
