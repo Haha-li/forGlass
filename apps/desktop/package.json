@@ -2,11 +2,15 @@
   "name": "@forglass/desktop",
   "private": true,
   "version": "0.1.0",
+  "description": "Glass cutting optimizer desktop app",
+  "author": "forGlass",
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
     "dev": "node ./electron/dev.mjs",
-    "build": "vite build"
+    "build": "vite build",
+    "pack:win": "npm run build && electron-builder --dir --win",
+    "dist:win": "npm run build && electron-builder --win nsis portable"
   },
   "dependencies": {
     "@forglass/core": "file:../../packages/core",
@@ -14,8 +18,50 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
-    "electron": "^35.1.4",
+    "electron": "35.7.5",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.8.2",
     "vite": "^6.2.3"
+  },
+  "build": {
+    "appId": "com.forglass.desktop",
+    "productName": "Glass Cutting Optimizer",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.mjs"
+    },
+    "electronVersion": "35.7.5",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "Glass Cutting Optimizer",
+      "artifactName": "for-glass-${version}-${arch}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "for-glass-${version}-${arch}-portable.${ext}"
+    }
   }
 }

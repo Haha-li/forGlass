@@ -79,3 +79,18 @@ npm run dev:desktop
 ```
 
 核心求解器本身不强制单位，只要求输入保持一致即可；当前桌面端界面默认按 cm 展示和录入。
+
+## Windows 打包与发布
+
+本地生成 Windows 可执行文件：
+
+```bash
+npm run dist:desktop:win
+```
+
+生成结果会输出到 `apps/desktop/release`，默认包含：
+
+- `for-glass-<版本>-x64-setup.exe`
+- `for-glass-<版本>-x64-portable.exe`
+
+推送形如 `v0.1.0` 的 Git 标签到 GitHub 后，`.github/workflows/release-desktop.yml` 会自动构建并把 `.exe` 文件上传到 GitHub Releases。
