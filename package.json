@@ -1,20 +1,23 @@
 {
-    "name":  "for-glass",
-    "private":  true,
-    "version":  "0.1.0",
-    "workspaces":  [
-                       "apps/*",
-                       "packages/*"
-                   ],
-    "scripts":  {
-                    "dev:desktop":  "npm --workspace @forglass/desktop run dev",
-                    "build:desktop":  "npm --workspace @forglass/desktop run build",
-                    "solve:example":  "node --experimental-strip-types packages/core/src/cli.ts data/examples/order.basic.json",
-                    "test:core":  "node --experimental-strip-types packages/core/test/run-tests.ts",
-                    "pack:desktop:win":  "npm --workspace @forglass/desktop run pack:win",
-                    "dist:desktop:win":  "npm --workspace @forglass/desktop run dist:win"
-                },
-    "engines":  {
-                    "node":  "\u003e=22.0.0"
-                }
+  "name": "for-glass",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:desktop": "npm --workspace @forglass/desktop run dev",
+    "build:desktop": "npm --workspace @forglass/desktop run build",
+    "dev:web": "npm --workspace @forglass/desktop run dev:web",
+    "build:web": "npm --workspace @forglass/desktop run build:web",
+    "preview:web": "npm --workspace @forglass/desktop run preview:web",
+    "solve:example": "node --experimental-strip-types packages/core/src/cli.ts data/examples/order.basic.json",
+    "test:core": "node --experimental-strip-types packages/core/test/run-tests.ts",
+    "pack:desktop:win": "npm --workspace @forglass/desktop run pack:win",
+    "dist:desktop:win": "npm --workspace @forglass/desktop run dist:win"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

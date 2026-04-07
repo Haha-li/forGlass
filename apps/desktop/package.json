@@ -8,7 +8,10 @@
   "main": "electron/main.mjs",
   "scripts": {
     "dev": "node ./electron/dev.mjs",
+    "dev:web": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
+    "build:web": "vite build",
+    "preview:web": "vite preview --host 0.0.0.0 --port 4173",
     "pack:win": "npm run build && electron-builder --dir --win",
     "dist:win": "npm run build && electron-builder --win nsis portable"
   },

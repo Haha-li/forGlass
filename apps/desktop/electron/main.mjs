@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,7 +13,7 @@ function createWindow() {
     minHeight: 760,
     title: "玻璃切割优化",
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs")
+      preload: path.join(__dirname, "preload.cjs")
     }
   });
 

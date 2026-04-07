@@ -11,6 +11,7 @@
 ## 技术方案
 
 - 桌面端：Electron + Vue 3 + TypeScript
+- 纯 Web：同一套 Vue 界面可直接浏览器访问
 - 核心求解：独立 `packages/core`，后续移动端可以直接复用
 - 示例数据：`data/examples`
 
@@ -34,7 +35,7 @@
 ## 目录
 
 ```text
-apps/desktop       Electron + Vue 3 桌面端
+apps/desktop       Electron + Vue 3 桌面端 / Web 共用前端
 packages/core      切割求解核心
 data/examples      示例订单
 ```
@@ -63,6 +64,24 @@ npm run test:core
 
 ```bash
 npm run dev:desktop
+```
+
+启动纯 Web 开发环境：
+
+```bash
+npm run dev:web
+```
+
+构建纯 Web 静态文件：
+
+```bash
+npm run build:web
+```
+
+本地预览 Web 构建结果：
+
+```bash
+npm run preview:web
 ```
 
 ## 输入模型
@@ -94,3 +113,9 @@ npm run dist:desktop:win
 - `for-glass-<版本>-x64-portable.exe`
 
 推送形如 `v0.1.0` 的 Git 标签到 GitHub 后，`.github/workflows/release-desktop.yml` 会自动构建并把 `.exe` 文件上传到 GitHub Releases。
+
+## Web 部署
+
+推送到 `master` 后，`.github/workflows/deploy-web.yml` 会自动构建 Web 版本并部署到 GitHub Pages。
+
+如果仓库 Pages 还没启用，请在 GitHub 仓库设置里把 Pages 的来源设为 GitHub Actions。
