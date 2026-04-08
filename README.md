@@ -116,7 +116,13 @@ npm run preview:web
     "sheetRotation": [true, false, true]
   },
   "pieces": [
-    { "id": "A", "width": 1200, "height": 800, "quantity": 3, "canRotate": true },
+    {
+      "id": "A",
+      "width": 1200,
+      "height": 800,
+      "quantity": 3,
+      "canRotate": true
+    },
     { "id": "B", "width": 900, "height": 600, "quantity": 4 }
   ]
 }
@@ -131,11 +137,6 @@ npm run preview:web
 ## Web 登录说明
 
 当前 Web 版本带了一个简单登录门槛：
-
-- 固定密码：`2580`
-- 登录状态保存在浏览器 `localStorage`
-- 同一个浏览器再次访问同一个站点时，不需要重新登录
-- 点击页面中的“退出登录”或清除站点数据后，需要重新输入密码
 
 注意：这只是前端登录门槛，主要用于阻挡普通直接访问，不属于真正的服务端安全认证。
 
