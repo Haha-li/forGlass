@@ -57,7 +57,7 @@ run("marks pieces as unplaced when they cannot fit even on an empty sheet", () =
 
   assert.equal(plan.summary.sheetCount, 0);
   assert.equal(plan.unplaced.length, 1);
-  assert.match(plan.unplaced[0].reason, /does not fit/i);
+  assert.ok(plan.unplaced[0].reason.includes("\u65e0\u6cd5\u6392\u5165"));
 });
 
 run("respects per-sheet rotation settings", () => {

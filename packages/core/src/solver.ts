@@ -434,7 +434,7 @@ export function solveCuttingPlan(request: SolveRequest): CuttingPlan {
         instanceId: piece.instanceId,
         width: piece.width,
         height: piece.height,
-        reason: "Piece does not fit into any available stock sheet with current edge margin and kerf"
+        reason: "\u8be5\u6210\u54c1\u65e0\u6cd5\u6392\u5165\u4efb\u4f55\u53ef\u7528\u539f\u7247"
       });
       continue;
     }

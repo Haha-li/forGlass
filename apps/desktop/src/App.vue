@@ -37,7 +37,17 @@ interface StockParseResult {
   totalQuantity: number;
 }
 
-const samplePieceText = ["120*80*1", "90*60*2", "50*40*4"].join("\n");
+interface UnplacedPieceCard {
+  pieceId: string;
+  spec: string;
+  width: number;
+  height: number;
+  quantity: number;
+  reasonText: string;
+  lineNumbers: number[];
+}
+
+const samplePieceText = ["1200*800*1", "900*600*2", "500*400*4"].join("\n");
 const pieceLinePattern =
   /^(?:([^:：\s]+)\s*[:：]\s*)?(\d+(?:\.\d+)?)\s*(?:\*|x|X|\u00D7)\s*(\d+(?:\.\d+)?)\s*(?:\*|x|X|\u00D7)\s*(\d+)\s*$/;
 
@@ -63,7 +73,7 @@ const form = reactive<{
   maxSheetsText: string;
   pieceText: string;
 }>({
-  stockRows: [createStockRow(250, 200, 1)],
+  stockRows: [createStockRow(2500, 2000, 1)],
   kerf: 0,
   edgeMargin: 0,
   maxSheetsText: "",
@@ -159,11 +169,11 @@ function formatSize(width: number | null | undefined, height: number | null | un
 }
 
 function formatLength(value: number | null | undefined): string {
-  return `${formatNumber(value)} cm`;
+  return `${formatNumber(value)} mm`;
 }
 
 function formatArea(value: number | null | undefined): string {
-  return `${formatNumber(value)} cm2`;
+  return `${formatNumber(value)} mm2`;
 }
 
 function clearSheetRotationOverrides(): void {
@@ -360,7 +370,7 @@ const pieceResult = computed<PieceParseResult>(() => {
     const match = pieceLinePattern.exec(line);
 
     if (!match) {
-      errors.push(`第 ${index + 1} 行格式不对，请写成“长*宽*数量”，例如 30*20*3`);
+      errors.push(`第 ${index + 1} 行格式不对，请写成“长*宽*数量”，例如 300*200*3`);
       continue;
     }
 
@@ -569,6 +579,54 @@ function pieceSheetSourceText(pieceId: string): string {
   return piecePlacementMetaById.value.sheetSummaryById.get(pieceId) ?? "--";
 }
 
+const unplacedPieceCards = computed<UnplacedPieceCard[]>(() => {
+  if (!plan.value || plan.value.unplaced.length === 0) {
+    return [];
+  }
+
+  const parsedById = new Map(pieceResult.value.pieces.map((piece) => [piece.id, piece]));
+  const grouped = new Map<string, UnplacedPieceCard>();
+
+  for (const piece of plan.value.unplaced) {
+    const existing = grouped.get(piece.pieceId);
+
+    if (existing) {
+      existing.quantity += 1;
+
+      if (!existing.reasonText.split(" / ").includes(piece.reason)) {
+        existing.reasonText = `${existing.reasonText} / ${piece.reason}`;
+      }
+
+      continue;
+    }
+
+    const parsedPiece = parsedById.get(piece.pieceId);
+    grouped.set(piece.pieceId, {
+      pieceId: piece.pieceId,
+      spec: parsedPiece?.spec ?? formatSize(piece.width, piece.height),
+      width: piece.width,
+      height: piece.height,
+      quantity: 1,
+      reasonText: piece.reason,
+      lineNumbers: parsedPiece?.lineNumbers ? [...parsedPiece.lineNumbers] : []
+    });
+  }
+
+  return [...grouped.values()].sort((left, right) => {
+    if (right.quantity !== left.quantity) {
+      return right.quantity - left.quantity;
+    }
+
+    const areaDiff = right.width * right.height - left.width * left.height;
+
+    if (areaDiff !== 0) {
+      return areaDiff;
+    }
+
+    return left.pieceId.localeCompare(right.pieceId);
+  });
+});
+
 const stockUsageMetaById = computed(() => {
   const usedCounts = new Map<string, number>();
 
@@ -659,7 +717,7 @@ function stockFullyUsed(index: number): boolean {
         <h1>输入原片尺寸和成品清单，自动生成切割方案</h1>
         <p class="lead">
           原片清单支持录入多种尺寸和数量，成品清单按每行一个规格录入，例如
-          <code>30*20*3</code>，这里默认表示 30 × 20，共 3 件。系统会先在你提供的原片范围内优先减少用片数量，再尽量减少废料。
+          <code>300*200*3</code>，这里默认表示 300 × 200，共 3 件。系统会先在你提供的原片范围内优先减少用片数量，再尽量减少废料。
         </p>
         <div class="hero-actions">
           <button class="button button-ghost button-inline" type="button" @click="logout">退出登录</button>
@@ -676,7 +734,7 @@ function stockFullyUsed(index: number): boolean {
           <strong>{{ formatPercent(plan?.summary.utilization ?? 0) }}</strong>
         </article>
         <article class="metric">
-          <span>总废料面积 (cm2)</span>
+          <span>总废料面积 (mm2)</span>
           <strong>{{ formatArea(plan?.summary.totalWasteArea ?? 0) }}</strong>
         </article>
         <article class="metric">
@@ -690,7 +748,7 @@ function stockFullyUsed(index: number): boolean {
       <article class="panel input-panel">
         <div class="panel-heading">
           <h2>输入参数</h2>
-          <span>长度单位：cm</span>
+          <span>长度单位：mm</span>
         </div>
 
         <div class="stock-section">
@@ -744,11 +802,11 @@ function stockFullyUsed(index: number): boolean {
 
         <div class="field-grid field-grid-secondary">
           <label class="field">
-            <span>刀缝 (cm)</span>
+            <span>刀缝 (mm)</span>
             <input v-model.number="form.kerf" type="number" min="0" step="0.01" />
           </label>
           <label class="field">
-            <span>边距 (cm)</span>
+            <span>边距 (mm)</span>
             <input v-model.number="form.edgeMargin" type="number" min="0" step="0.01" />
           </label>
           <label class="field field-wide">
@@ -767,8 +825,8 @@ function stockFullyUsed(index: number): boolean {
             spellcheck="false"
           />
           <small>
-            每行一项，支持 <code>*</code>、<code>x</code>、<code>×</code>，默认单位都是 cm，例如
-            <code>120*80*1</code> 或 <code>90*60*2</code>。如需控制某张原片是否允许旋转，请在下方切割结果里切换。
+            每行一项，支持 <code>*</code>、<code>x</code>、<code>×</code>，默认单位都是 mm，例如
+            <code>1200*800*1</code> 或 <code>900*600*2</code>。如需控制某张原片是否允许旋转，请在下方切割结果里切换。
           </small>
         </label>
 
@@ -838,7 +896,7 @@ function stockFullyUsed(index: number): boolean {
       </div>
 
       <div v-if="pieceResult.pieces.length === 0" class="empty-state">
-        每行录入一个规格，例如 <code>30*20*3</code>，表示长 30cm、宽 20cm、数量 3。
+        每行录入一个规格，例如 <code>300*200*3</code>，表示长 300mm、宽 200mm、数量 3。
       </div>
 
       <div v-else class="table-wrap">
@@ -849,7 +907,7 @@ function stockFullyUsed(index: number): boolean {
               <th>数量</th>
               <th>已切割数</th>
               <th>未切割数</th>
-              <th>单件面积 (cm2)</th>
+              <th>单件面积 (mm2)</th>
               <th>来源行</th>
               <th>切自原片</th>
             </tr>
@@ -867,7 +925,7 @@ function stockFullyUsed(index: number): boolean {
               </td>
               <td>{{ piece.quantity }}</td>
               <td>{{ piecePlacedCountText(piece.id) }}</td>
-              <td>{{ pieceUnplacedCountText(piece.id) }}</td>
+              <td :class="{ 'piece-unplaced-count': Number(pieceUnplacedCountText(piece.id)) > 0 }">{{ pieceUnplacedCountText(piece.id) }}</td>
               <td>{{ formatArea(piece.area) }}</td>
               <td>{{ piece.lineNumbers.join(", ") }}</td>
               <td>{{ pieceSheetSourceText(piece.id) }}</td>
@@ -888,7 +946,7 @@ function stockFullyUsed(index: number): boolean {
       </div>
 
       <div v-else-if="plan.sheets.length === 0" class="empty-state">
-        当前没有生成可用原片，请检查成品尺寸是否超过原片可用范围（单位为 cm）。
+        当前没有生成可用原片，请检查成品尺寸是否超过原片可用范围（单位为 mm）。
       </div>
 
       <div v-else class="sheet-list">
@@ -912,7 +970,7 @@ function stockFullyUsed(index: number): boolean {
           </header>
 
           <div class="sheet-stats">
-            <span>尺寸 {{ formatSize(sheet.width, sheet.height) }} cm</span>
+            <span>尺寸 {{ formatSize(sheet.width, sheet.height) }} mm</span>
             <span>已用 {{ formatArea(sheet.placedArea) }}</span>
             <span>废料 {{ formatArea(sheet.wasteArea) }}</span>
             <span>最大连续余料 {{ formatArea(sheet.largestLeftoverArea) }}</span>
@@ -955,15 +1013,6 @@ function stockFullyUsed(index: number): boolean {
               </div>
             </div>
           </div>
-
-          <ul class="placement-list">
-            <li v-for="placement in sheet.placements" :key="`${sheet.index}-${placement.instanceId}`">
-              <span>{{ placement.instanceId }}</span>
-              <span>{{ formatSize(placement.width, placement.height) }} cm</span>
-              <span>坐标 ({{ formatLength(placement.x) }}, {{ formatLength(placement.y) }})</span>
-              <span>{{ placement.rotated ? "已旋转" : "未旋转" }}</span>
-            </li>
-          </ul>
         </article>
       </div>
     </section>
@@ -971,14 +1020,30 @@ function stockFullyUsed(index: number): boolean {
     <section v-if="plan && plan.unplaced.length > 0" class="panel panel-warning">
       <div class="panel-heading">
         <h2>未能排入的成品</h2>
-        <span>{{ plan.unplaced.length }} 件</span>
+        <span>{{ plan.unplaced.length }} 件 / {{ unplacedPieceCards.length }} 种规格</span>
       </div>
 
-      <ul class="warning-list">
-        <li v-for="piece in plan.unplaced" :key="piece.instanceId">
-          {{ piece.instanceId }} / {{ formatSize(piece.width, piece.height) }} cm: {{ piece.reason }}
-        </li>
-      </ul>
+      <div class="unplaced-grid">
+        <article v-for="item in unplacedPieceCards" :key="item.pieceId" class="unplaced-card">
+          <div class="unplaced-card-head">
+            <div class="piece-cell">
+              <span class="piece-chip" :style="pieceChipStyle(item.width, item.height)" />
+              <div>
+                <strong>{{ item.spec }}</strong>
+                <small v-if="item.pieceId !== item.spec">编号 {{ item.pieceId }}</small>
+              </div>
+            </div>
+            <span class="unplaced-badge">未切割 {{ item.quantity }}</span>
+          </div>
+
+          <div class="unplaced-meta">
+            <span>单件面积 {{ formatArea(item.width * item.height) }}</span>
+            <span v-if="item.lineNumbers.length > 0">来源行 {{ item.lineNumbers.join(", ") }}</span>
+          </div>
+
+          <p class="unplaced-reason">{{ item.reasonText }}</p>
+        </article>
+      </div>
     </section>
   </main>
 </template>

@@ -11,8 +11,8 @@
 ## 当前功能
 
 - 支持多种原片尺寸，每种原片可分别设置宽、高、数量。
-- 支持成品清单按每行一个规格录入，例如 `30*20*3`。
-- 默认单位为 `cm`。
+- 支持成品清单按每行一个规格录入，例如 `300*200*3`。
+- 默认单位为 `mm`。
 - 默认刀缝 `kerf` 和边距 `edgeMargin` 都是 `0`，可手动修改。
 - 只考虑直角矩形切割，不做圆角。
 - 当一块原片放不下时，会自动继续尝试第 2 块、第 3 块，直到放完或确认有些成品无法排入。
@@ -96,9 +96,9 @@ npm run preview:web
 - 成品清单：每行一个规格，格式为 `长*宽*数量`，例如：
 
 ```text
-30*20*3
-45*35*2
-120*80*1
+300*200*3
+450*350*2
+1200*800*1
 ```
 
 ### 核心求解器 JSON 示例
@@ -106,8 +106,8 @@ npm run preview:web
 ```json
 {
   "stock": [
-    { "id": "stock-1", "width": 250, "height": 200, "quantity": 2 },
-    { "id": "stock-2", "width": 180, "height": 120, "quantity": 3 }
+    { "id": "stock-1", "width": 2500, "height": 2000, "quantity": 2 },
+    { "id": "stock-2", "width": 1800, "height": 1200, "quantity": 3 }
   ],
   "options": {
     "kerf": 0,
@@ -116,8 +116,8 @@ npm run preview:web
     "sheetRotation": [true, false, true]
   },
   "pieces": [
-    { "id": "A", "width": 120, "height": 80, "quantity": 3, "canRotate": true },
-    { "id": "B", "width": 90, "height": 60, "quantity": 4 }
+    { "id": "A", "width": 1200, "height": 800, "quantity": 3, "canRotate": true },
+    { "id": "B", "width": 900, "height": 600, "quantity": 4 }
   ]
 }
 ```
@@ -125,7 +125,7 @@ npm run preview:web
 说明：
 
 - `stock` 既可以是单个对象，也可以是对象数组。界面当前使用的是数组模式。
-- 核心求解器本身不强制单位，只要求输入保持一致即可；当前界面默认按 `cm` 展示和录入。
+- 核心求解器本身不强制单位，只要求输入保持一致即可；当前界面默认按 `mm` 展示和录入。
 - `sheetRotation` 是按生成出的原片顺序控制是否允许旋转。
 
 ## Web 登录说明
