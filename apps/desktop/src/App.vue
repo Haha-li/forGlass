@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import {
   solveCuttingPlan,
   type FreeRect,
@@ -71,6 +71,53 @@ const form = reactive<{
 });
 
 const sheetRotationOverrides = reactive<Record<number, boolean>>({});
+
+const AUTH_PASSWORD = "2580";
+const AUTH_STORAGE_KEY = "forglass-auth-session";
+const AUTH_STORAGE_VALUE = "verified";
+
+const authPassword = ref("");
+const authError = ref("");
+const authReady = ref(false);
+const isAuthenticated = ref(false);
+
+onMounted(() => {
+  if (typeof window !== "undefined") {
+    isAuthenticated.value = window.localStorage.getItem(AUTH_STORAGE_KEY) === AUTH_STORAGE_VALUE;
+  }
+
+  authReady.value = true;
+});
+
+function submitLogin(): void {
+  if (!authPassword.value) {
+    authError.value = "请输入密码";
+    return;
+  }
+
+  if (authPassword.value !== AUTH_PASSWORD) {
+    authError.value = "密码错误，请重新输入";
+    return;
+  }
+
+  isAuthenticated.value = true;
+  authError.value = "";
+  authPassword.value = "";
+
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(AUTH_STORAGE_KEY, AUTH_STORAGE_VALUE);
+  }
+}
+
+function logout(): void {
+  isAuthenticated.value = false;
+  authPassword.value = "";
+  authError.value = "";
+
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+}
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(2)}%`;
@@ -574,7 +621,38 @@ function stockFullyUsed(index: number): boolean {
 </script>
 
 <template>
-  <main class="shell">
+  <main v-if="!authReady" class="auth-shell">
+    <section class="auth-card auth-card-loading">
+      <p class="eyebrow">Glass Cutting Optimizer</p>
+      <h1 class="auth-title">正在检查登录状态</h1>
+    </section>
+  </main>
+
+  <main v-else-if="!isAuthenticated" class="auth-shell">
+    <section class="auth-card">
+      <p class="eyebrow">Glass Cutting Optimizer</p>
+      <h1 class="auth-title">请输入登录密码</h1>
+      <p class="auth-copy">输入正确密码后才能查看切割结果。</p>
+      <form class="auth-form" @submit.prevent="submitLogin">
+        <label class="field">
+          <span>登录密码</span>
+          <input
+            v-model="authPassword"
+            type="password"
+            inputmode="numeric"
+            autocomplete="current-password"
+            placeholder="请输入密码"
+            autofocus
+            @input="authError = ''"
+          />
+        </label>
+        <p v-if="authError" class="auth-error">{{ authError }}</p>
+        <button class="button auth-submit" type="submit">登录</button>
+      </form>
+    </section>
+  </main>
+
+  <main v-else class="shell">
     <section class="hero">
       <div>
         <p class="eyebrow">Glass Cutting Optimizer</p>
@@ -583,6 +661,9 @@ function stockFullyUsed(index: number): boolean {
           原片清单支持录入多种尺寸和数量，成品清单按每行一个规格录入，例如
           <code>30*20*3</code>，这里默认表示 30 × 20，共 3 件。系统会先在你提供的原片范围内优先减少用片数量，再尽量减少废料。
         </p>
+        <div class="hero-actions">
+          <button class="button button-ghost button-inline" type="button" @click="logout">退出登录</button>
+        </div>
       </div>
 
       <div class="hero-metrics">
