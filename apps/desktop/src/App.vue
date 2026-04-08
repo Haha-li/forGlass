@@ -8,6 +8,8 @@ import {
   type SolveRequest
 } from "@forglass/core";
 
+type NumericFieldValue = number | "";
+
 interface ParsedPieceRow extends PieceRequirement {
   spec: string;
   area: number;
@@ -24,7 +26,14 @@ const samplePieceText = ["120*80*1", "90*60*2", "50*40*4"].join("\n");
 const pieceLinePattern =
   /^(?:([^:：\s]+)\s*[:：]\s*)?(\d+(?:\.\d+)?)\s*(?:\*|x|X|×)\s*(\d+(?:\.\d+)?)\s*(?:\*|x|X|×)\s*(\d+)\s*$/;
 
-const form = reactive({
+const form = reactive<{
+  stockWidth: NumericFieldValue;
+  stockHeight: NumericFieldValue;
+  kerf: NumericFieldValue;
+  edgeMargin: NumericFieldValue;
+  maxSheetsText: string;
+  pieceText: string;
+}>({
   stockWidth: 250,
   stockHeight: 200,
   kerf: 0,
@@ -39,19 +48,41 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(2)}%`;
 }
 
-function formatNumber(value: number): string {
+function parseNumber(value: NumericFieldValue): number | null {
+  if (value === "") {
+    return null;
+  }
+
+  return Number.isFinite(value) ? value : null;
+}
+
+function parsePositiveNumber(value: NumericFieldValue): number | null {
+  const parsed = parseNumber(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
+function parseNonNegativeNumber(value: NumericFieldValue): number | null {
+  const parsed = parseNumber(value);
+  return parsed !== null && parsed >= 0 ? parsed : null;
+}
+
+function formatNumber(value: number | null | undefined): string {
+  if (!Number.isFinite(value)) {
+    return "--";
+  }
+
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-function formatSize(width: number, height: number): string {
+function formatSize(width: number | null | undefined, height: number | null | undefined): string {
   return `${formatNumber(width)} × ${formatNumber(height)}`;
 }
 
-function formatLength(value: number): string {
+function formatLength(value: number | null | undefined): string {
   return `${formatNumber(value)} cm`;
 }
 
-function formatArea(value: number): string {
+function formatArea(value: number | null | undefined): string {
   return `${formatNumber(value)} cm2`;
 }
 
@@ -271,10 +302,24 @@ const maxSheetsValidationMessage = computed(() => {
   return "";
 });
 
+const stockValidationMessage = computed(() => {
+  if (form.stockWidth === "" || form.stockHeight === "") {
+    return "请先输入原片宽度和高度。";
+  }
+
+  if (parsePositiveNumber(form.stockWidth) === null || parsePositiveNumber(form.stockHeight) === null) {
+    return "原片宽度和高度必须是大于 0 的数字。";
+  }
+
+  return "";
+});
+
 const request = computed<SolveRequest>(() => {
+  const stockWidth = parsePositiveNumber(form.stockWidth) ?? 0;
+  const stockHeight = parsePositiveNumber(form.stockHeight) ?? 0;
   const options: NonNullable<SolveRequest["options"]> = {
-    kerf: form.kerf,
-    edgeMargin: form.edgeMargin
+    kerf: parseNonNegativeNumber(form.kerf) ?? 0,
+    edgeMargin: parseNonNegativeNumber(form.edgeMargin) ?? 0
   };
   const rawMaxSheets = form.maxSheetsText.trim();
   const sheetRotation = buildSheetRotationSettings();
@@ -289,8 +334,8 @@ const request = computed<SolveRequest>(() => {
 
   return {
     stock: {
-      width: form.stockWidth,
-      height: form.stockHeight
+      width: stockWidth,
+      height: stockHeight
     },
     options,
     pieces: pieceResult.value.pieces.map(({ spec, area, lineNumbers, ...piece }) => piece)
@@ -300,6 +345,10 @@ const request = computed<SolveRequest>(() => {
 const solveState = computed(() => {
   if (pieceResult.value.errors.length > 0) {
     return { plan: null, error: "" };
+  }
+
+  if (stockValidationMessage.value) {
+    return { plan: null, error: stockValidationMessage.value };
   }
 
   if (maxSheetsValidationMessage.value) {
@@ -439,12 +488,13 @@ const solveError = computed(() => solveState.value.error);
           </article>
         </div>
 
-        <div v-if="pieceResult.errors.length > 0 || maxSheetsValidationMessage || solveError" class="message message-error">
+        <div v-if="pieceResult.errors.length > 0 || stockValidationMessage || maxSheetsValidationMessage || solveError" class="message message-error">
           <h3>输入还需要调整</h3>
           <ul>
             <li v-for="error in pieceResult.errors" :key="error">{{ error }}</li>
+            <li v-if="stockValidationMessage">{{ stockValidationMessage }}</li>
             <li v-if="maxSheetsValidationMessage">{{ maxSheetsValidationMessage }}</li>
-            <li v-if="solveError && !pieceResult.errors.length && !maxSheetsValidationMessage">{{ solveError }}</li>
+            <li v-if="solveError && !pieceResult.errors.length && !stockValidationMessage && !maxSheetsValidationMessage">{{ solveError }}</li>
           </ul>
         </div>
 
