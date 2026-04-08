@@ -1,7 +1,8 @@
-﻿export interface StockSheet {
+export interface StockSheet {
   id?: string;
   width: number;
   height: number;
+  quantity?: number;
 }
 
 export interface PieceRequirement {
@@ -20,7 +21,7 @@ export interface SolverOptions {
 }
 
 export interface SolveRequest {
-  stock: StockSheet;
+  stock: StockSheet | StockSheet[];
   pieces: PieceRequirement[];
   options?: SolverOptions;
 }
@@ -56,6 +57,8 @@ export interface FreeRect {
 
 export interface SheetLayout {
   index: number;
+  stockId?: string;
+  stockTypeIndex: number;
   width: number;
   height: number;
   placements: Placement[];

@@ -1,4 +1,4 @@
-﻿import { readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { solveCuttingPlan } from "./solver.ts";
 import type { SolveRequest } from "./types.ts";
@@ -22,10 +22,15 @@ const fullPath = resolve(process.cwd(), inputPath);
 const fileContent = readFileSync(fullPath, "utf-8").replace(/^\uFEFF/, "");
 const request = JSON.parse(fileContent) as SolveRequest;
 const plan = solveCuttingPlan(request);
+const stocks = Array.isArray(request.stock) ? request.stock : [request.stock];
 
 console.log(`Cutting plan for ${basename(fullPath)}`);
 console.log("");
-console.log(`Stock: ${request.stock.width} x ${request.stock.height}`);
+console.log("Stocks:");
+for (const stock of stocks) {
+  const quantityText = stock.quantity === undefined ? "" : ` x ${stock.quantity}`;
+  console.log(`  - ${stock.width} x ${stock.height}${quantityText}`);
+}
 console.log(`Sheets used: ${plan.summary.sheetCount}`);
 console.log(`Placed area: ${formatNumber(plan.summary.totalPlacedArea)}`);
 console.log(`Waste area: ${formatNumber(plan.summary.totalWasteArea)}`);
@@ -34,7 +39,7 @@ console.log(`Largest leftover rectangle: ${formatNumber(plan.summary.largestLeft
 console.log("");
 
 for (const sheet of plan.sheets) {
-  console.log(`Sheet #${sheet.index + 1}`);
+  console.log(`Sheet #${sheet.index + 1} (${sheet.width} x ${sheet.height})`);
   console.log(
     `  placed area ${formatNumber(sheet.placedArea)}, waste ${formatNumber(sheet.wasteArea)}, largest leftover ${formatNumber(sheet.largestLeftoverArea)}`
   );

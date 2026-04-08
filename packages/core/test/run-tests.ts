@@ -1,12 +1,12 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { solveCuttingPlan } from "../src/solver.ts";
 
 function run(name: string, fn: () => void): void {
   try {
     fn();
-    console.log(`PASS ${name}`);
+    console.log("PASS " + name);
   } catch (error) {
-    console.error(`FAIL ${name}`);
+    console.error("FAIL " + name);
     throw error;
   }
 }
@@ -85,4 +85,37 @@ run("respects per-sheet rotation settings", () => {
   assert.equal(allowedPlan.summary.sheetCount, 2);
   assert.equal(allowedPlan.unplaced.length, 0);
   assert.equal(allowedPlan.sheets[1].placements[0].rotated, true);
+});
+
+run("selects the smallest available stock that fits", () => {
+  const plan = solveCuttingPlan({
+    stock: [
+      { id: "large", width: 100, height: 100, quantity: 1 },
+      { id: "small", width: 60, height: 60, quantity: 1 }
+    ],
+    pieces: [{ id: "P", width: 60, height: 60, quantity: 1 }]
+  });
+
+  assert.equal(plan.summary.sheetCount, 1);
+  assert.equal(plan.unplaced.length, 0);
+  assert.equal(plan.sheets[0].width, 60);
+  assert.equal(plan.sheets[0].height, 60);
+  assert.equal(plan.sheets[0].stockTypeIndex, 1);
+});
+
+run("uses another stock type when the first one runs out", () => {
+  const plan = solveCuttingPlan({
+    stock: [
+      { id: "square", width: 60, height: 60, quantity: 1 },
+      { id: "wide", width: 100, height: 60, quantity: 1 }
+    ],
+    pieces: [{ id: "P", width: 60, height: 60, quantity: 2 }]
+  });
+
+  assert.equal(plan.summary.sheetCount, 2);
+  assert.equal(plan.unplaced.length, 0);
+  assert.deepEqual(
+    plan.sheets.map((sheet) => String(sheet.width) + "x" + String(sheet.height)),
+    ["60x60", "100x60"]
+  );
 });

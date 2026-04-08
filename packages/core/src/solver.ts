@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   CuttingPlan,
   FreeRect,
   PieceInstance,
@@ -7,6 +7,7 @@
   SheetLayout,
   SolveRequest,
   SolverOptions,
+  StockSheet,
   UnplacedPiece
 } from "./types.ts";
 
@@ -17,8 +18,15 @@ interface NormalizedOptions {
   sheetRotation: boolean[];
 }
 
+interface NormalizedStockSheet extends StockSheet {
+  stockTypeIndex: number;
+  quantity: number;
+}
+
 interface MutableSheet {
   index: number;
+  stockId?: string;
+  stockTypeIndex: number;
   width: number;
   height: number;
   placements: Placement[];
@@ -28,6 +36,7 @@ interface MutableSheet {
 interface PlacementCandidate {
   requiresNewSheet: boolean;
   sheetIndex: number;
+  stockTypeIndex: number;
   freeRectIndex: number;
   placement: Placement;
   nextFreeRects: FreeRect[];
@@ -52,6 +61,39 @@ function assertPositive(name: string, value: number): void {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive number`);
   }
+}
+
+function normalizeStocks(stockInput: SolveRequest["stock"]): NormalizedStockSheet[] {
+  const stocks = Array.isArray(stockInput) ? stockInput : [stockInput];
+
+  if (stocks.length === 0) {
+    throw new Error("at least one stock sheet is required");
+  }
+
+  return stocks.map((stock, stockTypeIndex) => {
+    assertPositive(`stock ${stockTypeIndex + 1} width`, stock.width);
+    assertPositive(`stock ${stockTypeIndex + 1} height`, stock.height);
+
+    const quantity = stock.quantity ?? Number.POSITIVE_INFINITY;
+
+    if (!Number.isFinite(quantity)) {
+      return {
+        ...stock,
+        stockTypeIndex,
+        quantity: Number.POSITIVE_INFINITY
+      };
+    }
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error(`stock ${stockTypeIndex + 1} quantity must be a positive integer`);
+    }
+
+    return {
+      ...stock,
+      stockTypeIndex,
+      quantity
+    };
+  });
 }
 
 function createInitialFreeRect(stockWidth: number, stockHeight: number, edgeMargin: number): FreeRect {
@@ -169,13 +211,15 @@ function splitFreeRect(
   return nextRects.filter((rect): rect is FreeRect => rect !== null);
 }
 
-function buildEmptySheet(index: number, request: SolveRequest, options: NormalizedOptions): MutableSheet {
+function buildEmptySheet(index: number, stock: NormalizedStockSheet, options: NormalizedOptions): MutableSheet {
   return {
     index,
-    width: request.stock.width,
-    height: request.stock.height,
+    stockId: stock.id,
+    stockTypeIndex: stock.stockTypeIndex,
+    width: stock.width,
+    height: stock.height,
     placements: [],
-    freeRects: [createInitialFreeRect(request.stock.width, request.stock.height, options.edgeMargin)]
+    freeRects: [createInitialFreeRect(stock.width, stock.height, options.edgeMargin)]
   };
 }
 
@@ -205,6 +249,7 @@ function evaluateCandidate(
   return {
     requiresNewSheet,
     sheetIndex: sheet.index,
+    stockTypeIndex: sheet.stockTypeIndex,
     freeRectIndex,
     leftoverArea,
     shortSideGap,
@@ -248,6 +293,10 @@ function compareCandidates(left: PlacementCandidate, right: PlacementCandidate):
     return right.largestGeneratedArea - left.largestGeneratedArea;
   }
 
+  if (left.stockTypeIndex !== right.stockTypeIndex) {
+    return left.stockTypeIndex - right.stockTypeIndex;
+  }
+
   return left.sheetIndex - right.sheetIndex;
 }
 
@@ -264,48 +313,80 @@ function isSheetRotationEnabled(sheetIndex: number, options: NormalizedOptions):
   return options.sheetRotation[sheetIndex] !== false;
 }
 
-function findBestPlacement(
-  piece: PieceInstance,
-  sheets: MutableSheet[],
-  request: SolveRequest,
-  options: NormalizedOptions
-): PlacementCandidate | null {
-  let bestCandidate: PlacementCandidate | null = null;
-  const candidateSheets = [...sheets];
+function countUsedStocks(sheets: MutableSheet[], totalStockTypes: number): number[] {
+  const usedCounts = Array.from({ length: totalStockTypes }, () => 0);
 
-  if (sheets.length < options.maxSheets) {
-    candidateSheets.push(buildEmptySheet(sheets.length, request, options));
+  for (const sheet of sheets) {
+    usedCounts[sheet.stockTypeIndex] += 1;
   }
 
-  for (const sheet of candidateSheets) {
-    const requiresNewSheet = sheet.index >= sheets.length;
-    const canRotateOnSheet = piece.canRotate && isSheetRotationEnabled(sheet.index, options);
-    const rotationModes = canRotateOnSheet ? [false, true] : [false];
+  return usedCounts;
+}
 
-    for (const [freeRectIndex, freeRect] of sheet.freeRects.entries()) {
-      for (const rotated of rotationModes) {
-        for (const strategy of ["horizontal", "vertical"] as const) {
-          const candidate = evaluateCandidate(
-            piece,
-            sheet,
-            freeRect,
-            freeRectIndex,
-            rotated,
-            requiresNewSheet,
-            strategy,
-            options
-          );
+function collectCandidatesForSheet(
+  piece: PieceInstance,
+  sheet: MutableSheet,
+  requiresNewSheet: boolean,
+  options: NormalizedOptions,
+  currentBest: PlacementCandidate | null
+): PlacementCandidate | null {
+  let bestCandidate = currentBest;
+  const canRotateOnSheet = piece.canRotate && isSheetRotationEnabled(sheet.index, options);
+  const rotationModes = canRotateOnSheet ? [false, true] : [false];
 
-          if (!candidate) {
-            continue;
-          }
+  for (const [freeRectIndex, freeRect] of sheet.freeRects.entries()) {
+    for (const rotated of rotationModes) {
+      for (const strategy of ["horizontal", "vertical"] as const) {
+        const candidate = evaluateCandidate(
+          piece,
+          sheet,
+          freeRect,
+          freeRectIndex,
+          rotated,
+          requiresNewSheet,
+          strategy,
+          options
+        );
 
-          if (!bestCandidate || compareCandidates(candidate, bestCandidate) < 0) {
-            bestCandidate = candidate;
-          }
+        if (!candidate) {
+          continue;
+        }
+
+        if (!bestCandidate || compareCandidates(candidate, bestCandidate) < 0) {
+          bestCandidate = candidate;
         }
       }
     }
+  }
+
+  return bestCandidate;
+}
+
+function findBestPlacement(
+  piece: PieceInstance,
+  sheets: MutableSheet[],
+  stockSheets: NormalizedStockSheet[],
+  options: NormalizedOptions
+): PlacementCandidate | null {
+  let bestCandidate: PlacementCandidate | null = null;
+
+  for (const sheet of sheets) {
+    bestCandidate = collectCandidatesForSheet(piece, sheet, false, options, bestCandidate);
+  }
+
+  if (sheets.length >= options.maxSheets) {
+    return bestCandidate;
+  }
+
+  const usedCounts = countUsedStocks(sheets, stockSheets.length);
+
+  for (const stock of stockSheets) {
+    if (usedCounts[stock.stockTypeIndex] >= stock.quantity) {
+      continue;
+    }
+
+    const candidateSheet = buildEmptySheet(sheets.length, stock, options);
+    bestCandidate = collectCandidatesForSheet(piece, candidateSheet, true, options, bestCandidate);
   }
 
   return bestCandidate;
@@ -319,6 +400,8 @@ function summarizeSheet(sheet: MutableSheet): SheetLayout {
 
   return {
     index: sheet.index,
+    stockId: sheet.stockId,
+    stockTypeIndex: sheet.stockTypeIndex,
     width: sheet.width,
     height: sheet.height,
     placements: [...sheet.placements],
@@ -332,16 +415,18 @@ function summarizeSheet(sheet: MutableSheet): SheetLayout {
 }
 
 export function solveCuttingPlan(request: SolveRequest): CuttingPlan {
-  assertPositive("stock width", request.stock.width);
-  assertPositive("stock height", request.stock.height);
-
+  const stockSheets = normalizeStocks(request.stock);
   const options = normalizeOptions(request.options);
   const pieces = expandPieces(request.pieces);
   const sheets: MutableSheet[] = [];
   const unplaced: UnplacedPiece[] = [];
 
+  for (const stock of stockSheets) {
+    createInitialFreeRect(stock.width, stock.height, options.edgeMargin);
+  }
+
   for (const piece of pieces) {
-    const candidate = findBestPlacement(piece, sheets, request, options);
+    const candidate = findBestPlacement(piece, sheets, stockSheets, options);
 
     if (!candidate) {
       unplaced.push({
@@ -349,23 +434,22 @@ export function solveCuttingPlan(request: SolveRequest): CuttingPlan {
         instanceId: piece.instanceId,
         width: piece.width,
         height: piece.height,
-        reason: "Piece does not fit into the stock sheet with current edge margin and kerf"
+        reason: "Piece does not fit into any available stock sheet with current edge margin and kerf"
       });
       continue;
     }
 
     if (candidate.requiresNewSheet) {
-      sheets.push(buildEmptySheet(candidate.sheetIndex, request, options));
+      sheets.push(buildEmptySheet(candidate.sheetIndex, stockSheets[candidate.stockTypeIndex], options));
     }
 
     applyCandidate(sheets[candidate.sheetIndex], candidate);
   }
 
   const summarizedSheets = sheets.map(summarizeSheet);
-  const sheetArea = request.stock.width * request.stock.height;
-  const totalSheetArea = summarizedSheets.length * sheetArea;
+  const totalSheetArea = summarizedSheets.reduce((sum, sheet) => sum + sheet.width * sheet.height, 0);
   const totalPlacedArea = summarizedSheets.reduce((sum, sheet) => sum + sheet.placedArea, 0);
-  const totalWasteArea = totalSheetArea - totalPlacedArea;
+  const totalWasteArea = summarizedSheets.reduce((sum, sheet) => sum + sheet.wasteArea, 0);
   const largestLeftoverArea = summarizedSheets.reduce((largest, sheet) => Math.max(largest, sheet.largestLeftoverArea), 0);
   const reusableLeftoverArea = summarizedSheets.reduce((sum, sheet) => sum + sheet.largestLeftoverArea, 0);
 

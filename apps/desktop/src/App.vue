@@ -1,14 +1,23 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, reactive } from "vue";
 import {
   solveCuttingPlan,
+  type FreeRect,
   type PieceRequirement,
   type Placement,
   type SheetLayout,
-  type SolveRequest
+  type SolveRequest,
+  type StockSheet
 } from "@forglass/core";
 
 type NumericFieldValue = number | "";
+
+interface StockFormRow {
+  key: number;
+  width: NumericFieldValue;
+  height: NumericFieldValue;
+  quantity: NumericFieldValue;
+}
 
 interface ParsedPieceRow extends PieceRequirement {
   spec: string;
@@ -22,20 +31,39 @@ interface PieceParseResult {
   totalQuantity: number;
 }
 
+interface StockParseResult {
+  stocks: StockSheet[];
+  errors: string[];
+  totalQuantity: number;
+}
+
 const samplePieceText = ["120*80*1", "90*60*2", "50*40*4"].join("\n");
 const pieceLinePattern =
-  /^(?:([^:：\s]+)\s*[:：]\s*)?(\d+(?:\.\d+)?)\s*(?:\*|x|X|×)\s*(\d+(?:\.\d+)?)\s*(?:\*|x|X|×)\s*(\d+)\s*$/;
+  /^(?:([^:：\s]+)\s*[:：]\s*)?(\d+(?:\.\d+)?)\s*(?:\*|x|X|\u00D7)\s*(\d+(?:\.\d+)?)\s*(?:\*|x|X|\u00D7)\s*(\d+)\s*$/;
+
+let nextStockRowKey = 1;
+
+function createStockRow(
+  width: NumericFieldValue = "",
+  height: NumericFieldValue = "",
+  quantity: NumericFieldValue = 1
+): StockFormRow {
+  return {
+    key: nextStockRowKey++,
+    width,
+    height,
+    quantity
+  };
+}
 
 const form = reactive<{
-  stockWidth: NumericFieldValue;
-  stockHeight: NumericFieldValue;
+  stockRows: StockFormRow[];
   kerf: NumericFieldValue;
   edgeMargin: NumericFieldValue;
   maxSheetsText: string;
   pieceText: string;
 }>({
-  stockWidth: 250,
-  stockHeight: 200,
+  stockRows: [createStockRow(250, 200, 1)],
   kerf: 0,
   edgeMargin: 0,
   maxSheetsText: "",
@@ -64,6 +92,11 @@ function parsePositiveNumber(value: NumericFieldValue): number | null {
 function parseNonNegativeNumber(value: NumericFieldValue): number | null {
   const parsed = parseNumber(value);
   return parsed !== null && parsed >= 0 ? parsed : null;
+}
+
+function parsePositiveInteger(value: NumericFieldValue): number | null {
+  const parsed = parseNumber(value);
+  return parsed !== null && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function formatNumber(value: number | null | undefined): string {
@@ -122,6 +155,27 @@ function toggleSheetRotation(index: number): void {
   }
 
   delete sheetRotationOverrides[index];
+}
+
+function addStockRow(): void {
+  const lastRow = form.stockRows[form.stockRows.length - 1];
+  form.stockRows.push(createStockRow(lastRow?.width ?? "", lastRow?.height ?? "", 1));
+  clearSheetRotationOverrides();
+}
+
+function removeStockRow(key: number): void {
+  const index = form.stockRows.findIndex((row) => row.key === key);
+
+  if (index === -1) {
+    return;
+  }
+
+  form.stockRows.splice(index, 1);
+  clearSheetRotationOverrides();
+}
+
+function isBlankStockRow(row: StockFormRow): boolean {
+  return row.width === "" && row.height === "" && row.quantity === "";
 }
 
 function hashText(value: string): number {
@@ -187,10 +241,62 @@ function placementStyle(sheet: SheetLayout, placement: Placement) {
   };
 }
 
+function freeRectStyle(sheet: SheetLayout, freeRect: FreeRect) {
+  return {
+    left: `${(freeRect.x / sheet.width) * 100}%`,
+    top: `${(freeRect.y / sheet.height) * 100}%`,
+    width: `${(freeRect.width / sheet.width) * 100}%`,
+    height: `${(freeRect.height / sheet.height) * 100}%`
+  };
+}
+
 function clearPieces(): void {
   form.pieceText = "";
   clearSheetRotationOverrides();
 }
+
+const stockResult = computed<StockParseResult>(() => {
+  const stocks: StockSheet[] = [];
+  const errors: string[] = [];
+  let totalQuantity = 0;
+
+  for (const [index, row] of form.stockRows.entries()) {
+    if (isBlankStockRow(row)) {
+      continue;
+    }
+
+    const width = parsePositiveNumber(row.width);
+    const height = parsePositiveNumber(row.height);
+    const quantity = parsePositiveInteger(row.quantity);
+    const lineLabel = `${index + 1}`;
+
+    if (width === null) { errors.push(`第 ${lineLabel} 条原片的宽度必须是大于 0 的数字`); }
+    if (height === null) { errors.push(`第 ${lineLabel} 条原片的高度必须是大于 0 的数字`); }
+    if (quantity === null) { errors.push(`第 ${lineLabel} 条原片的个数必须是正整数`); }
+
+    if (width === null || height === null || quantity === null) {
+      continue;
+    }
+
+    stocks.push({
+      id: `stock-${index + 1}`,
+      width,
+      height,
+      quantity
+    });
+    totalQuantity += quantity;
+  }
+
+  if (stocks.length === 0) {
+    errors.push("请至少添加一条原片规格。");
+  }
+
+  return {
+    stocks,
+    errors,
+    totalQuantity
+  };
+});
 
 const pieceResult = computed<PieceParseResult>(() => {
   const grouped = new Map<string, ParsedPieceRow>();
@@ -302,21 +408,7 @@ const maxSheetsValidationMessage = computed(() => {
   return "";
 });
 
-const stockValidationMessage = computed(() => {
-  if (form.stockWidth === "" || form.stockHeight === "") {
-    return "请先输入原片宽度和高度。";
-  }
-
-  if (parsePositiveNumber(form.stockWidth) === null || parsePositiveNumber(form.stockHeight) === null) {
-    return "原片宽度和高度必须是大于 0 的数字。";
-  }
-
-  return "";
-});
-
 const request = computed<SolveRequest>(() => {
-  const stockWidth = parsePositiveNumber(form.stockWidth) ?? 0;
-  const stockHeight = parsePositiveNumber(form.stockHeight) ?? 0;
   const options: NonNullable<SolveRequest["options"]> = {
     kerf: parseNonNegativeNumber(form.kerf) ?? 0,
     edgeMargin: parseNonNegativeNumber(form.edgeMargin) ?? 0
@@ -333,10 +425,7 @@ const request = computed<SolveRequest>(() => {
   }
 
   return {
-    stock: {
-      width: stockWidth,
-      height: stockHeight
-    },
+    stock: stockResult.value.stocks,
     options,
     pieces: pieceResult.value.pieces.map(({ spec, area, lineNumbers, ...piece }) => piece)
   };
@@ -347,8 +436,8 @@ const solveState = computed(() => {
     return { plan: null, error: "" };
   }
 
-  if (stockValidationMessage.value) {
-    return { plan: null, error: stockValidationMessage.value };
+  if (stockResult.value.errors.length > 0) {
+    return { plan: null, error: "" };
   }
 
   if (maxSheetsValidationMessage.value) {
@@ -371,6 +460,117 @@ const solveState = computed(() => {
 
 const plan = computed(() => solveState.value.plan);
 const solveError = computed(() => solveState.value.error);
+
+const piecePlacementMetaById = computed(() => {
+  const placedCounts = new Map<string, number>();
+  const unplacedCounts = new Map<string, number>();
+  const sheetCounts = new Map<string, Map<number, number>>();
+  const sheetSummaryById = new Map<string, string>();
+
+  if (!plan.value) {
+    return { placedCounts, unplacedCounts, sheetSummaryById };
+  }
+
+  for (const sheet of plan.value.sheets) {
+    for (const placement of sheet.placements) {
+      placedCounts.set(placement.pieceId, (placedCounts.get(placement.pieceId) ?? 0) + 1);
+      const counts = sheetCounts.get(placement.pieceId) ?? new Map<number, number>();
+      counts.set(sheet.index, (counts.get(sheet.index) ?? 0) + 1);
+      sheetCounts.set(placement.pieceId, counts);
+    }
+  }
+
+  for (const piece of plan.value.unplaced) {
+    unplacedCounts.set(piece.pieceId, (unplacedCounts.get(piece.pieceId) ?? 0) + 1);
+  }
+
+  const pieceIds = new Set<string>([...placedCounts.keys(), ...unplacedCounts.keys()]);
+
+  for (const pieceId of pieceIds) {
+    const parts: string[] = [];
+    const counts = sheetCounts.get(pieceId);
+
+    if (counts) {
+      for (const [sheetIndex, quantity] of [...counts.entries()].sort((left, right) => left[0] - right[0])) {
+        parts.push(`原片${sheetIndex + 1} ×${quantity}`);
+      }
+    }
+
+    const unplacedCount = unplacedCounts.get(pieceId) ?? 0;
+
+    if (unplacedCount > 0) {
+      parts.push(`未排入 ×${unplacedCount}`);
+    }
+
+    if (parts.length > 0) {
+      sheetSummaryById.set(pieceId, parts.join("，"));
+    }
+  }
+
+  return { placedCounts, unplacedCounts, sheetSummaryById };
+});
+
+function piecePlacedCountText(pieceId: string): string {
+  return plan.value ? String(piecePlacementMetaById.value.placedCounts.get(pieceId) ?? 0) : "--";
+}
+
+function pieceUnplacedCountText(pieceId: string): string {
+  return plan.value ? String(piecePlacementMetaById.value.unplacedCounts.get(pieceId) ?? 0) : "--";
+}
+
+function pieceSheetSourceText(pieceId: string): string {
+  return piecePlacementMetaById.value.sheetSummaryById.get(pieceId) ?? "--";
+}
+
+const stockUsageMetaById = computed(() => {
+  const usedCounts = new Map<string, number>();
+
+  if (!plan.value) {
+    return usedCounts;
+  }
+
+  for (const sheet of plan.value.sheets) {
+    if (!sheet.stockId) {
+      continue;
+    }
+
+    usedCounts.set(sheet.stockId, (usedCounts.get(sheet.stockId) ?? 0) + 1);
+  }
+
+  return usedCounts;
+});
+
+function stockUsageMetaByIndex(index: number) {
+  const stockId = `stock-${index + 1}`;
+  const stock = stockResult.value.stocks.find((item) => item.id === stockId);
+
+  if (!plan.value || !stock?.quantity) {
+    return null;
+  }
+
+  const used = stockUsageMetaById.value.get(stockId) ?? 0;
+
+  return {
+    used,
+    unused: Math.max(stock.quantity - used, 0),
+    total: stock.quantity
+  };
+}
+
+function stockUnusedCountText(index: number): string {
+  const meta = stockUsageMetaByIndex(index);
+  return meta ? String(meta.unused) : "--";
+}
+
+function stockHasUnused(index: number): boolean {
+  const meta = stockUsageMetaByIndex(index);
+  return Boolean(meta && meta.unused > 0);
+}
+
+function stockFullyUsed(index: number): boolean {
+  const meta = stockUsageMetaByIndex(index);
+  return Boolean(meta && meta.used > 0 && meta.unused === 0);
+}
 </script>
 
 <template>
@@ -380,9 +580,8 @@ const solveError = computed(() => solveState.value.error);
         <p class="eyebrow">Glass Cutting Optimizer</p>
         <h1>输入原片尺寸和成品清单，自动生成切割方案</h1>
         <p class="lead">
-          原片尺寸可以手动输入，成品清单按每行一个规格录入，例如
-          <code>30*20*3</code>，这里默认表示 30cm × 20cm，共 3 件。系统会优先尽量少用原片，再尽量减少废料；一块放不下时会自动追加到第
-          2 块、第 3 块原片。
+          原片清单支持录入多种尺寸和数量，成品清单按每行一个规格录入，例如
+          <code>30*20*3</code>，这里默认表示 30 × 20，共 3 件。系统会先在你提供的原片范围内优先减少用片数量，再尽量减少废料。
         </p>
       </div>
 
@@ -413,15 +612,56 @@ const solveError = computed(() => solveState.value.error);
           <span>长度单位：cm</span>
         </div>
 
-        <div class="field-grid">
-          <label class="field">
-            <span>原片宽度 (cm)</span>
-            <input v-model.number="form.stockWidth" type="number" min="0.01" step="0.01" />
-          </label>
-          <label class="field">
-            <span>原片高度 (cm)</span>
-            <input v-model.number="form.stockHeight" type="number" min="0.01" step="0.01" />
-          </label>
+        <div class="stock-section">
+          <div class="section-heading">
+            <div>
+              <h3>原片清单</h3>
+              <p>支持多种尺寸，每条都可以设置宽、高和个数。</p>
+            </div>
+            <button class="button" type="button" @click="addStockRow">添加原片</button>
+          </div>
+
+          <div v-if="form.stockRows.length === 0" class="empty-state stock-empty">
+            先添加一条原片规格，再填写宽、高和个数。
+          </div>
+
+          <div v-else class="stock-list">
+            <section
+              v-for="(stockRow, index) in form.stockRows"
+              :key="stockRow.key"
+              class="stock-row"
+              :class="{ 'stock-row-has-unused': stockHasUnused(index) }"
+            >
+              <div class="stock-row-head">
+                <strong>原片规格 {{ index + 1 }}</strong>
+                <div class="stock-row-actions">
+                  <span v-if="stockHasUnused(index)" class="stock-usage-badge stock-usage-badge-unused">未使用 {{ stockUnusedCountText(index) }} 块</span>
+                  <span v-else-if="stockFullyUsed(index)" class="stock-usage-badge">已全部使用</span>
+                  <button class="button button-ghost button-inline" type="button" @click="removeStockRow(stockRow.key)">删除</button>
+                </div>
+              </div>
+
+              <div class="stock-row-grid">
+                <label class="field">
+                  <span>宽度</span>
+                  <input v-model.number="stockRow.width" type="number" min="0.01" step="0.01" />
+                </label>
+                <label class="field">
+                  <span>高度</span>
+                  <input v-model.number="stockRow.height" type="number" min="0.01" step="0.01" />
+                </label>
+                <label class="field">
+                  <span>个数</span>
+                  <input v-model.number="stockRow.quantity" type="number" min="1" step="1" />
+                </label>
+              </div>
+            </section>
+          </div>
+
+          <p class="section-tip">同尺寸直接改个数，不同尺寸就新增一条原片规格。</p>
+        </div>
+
+        <div class="field-grid field-grid-secondary">
           <label class="field">
             <span>刀缝 (cm)</span>
             <input v-model.number="form.kerf" type="number" min="0" step="0.01" />
@@ -433,7 +673,7 @@ const solveError = computed(() => solveState.value.error);
           <label class="field field-wide">
             <span>最多原片数</span>
             <input v-model="form.maxSheetsText" type="number" min="1" step="1" placeholder="留空表示不限" />
-            <small>可选。如果只允许最多 2 块或 3 块原片，可以在这里限制。</small>
+            <small>可选。即使原片清单里还有库存，也可以在这里再加一层总数限制。</small>
           </label>
         </div>
 
@@ -456,17 +696,17 @@ const solveError = computed(() => solveState.value.error);
         </div>
       </article>
 
-      <article class="panel">
+      <article v-if="false" class="panel">
         <div class="panel-heading">
           <h2>计算概览</h2>
           <span>实时更新</span>
         </div>
 
         <ul class="rule-list">
-          <li>优先减少原片数量，不够时自动增加下一块原片。</li>
-          <li>在原片数量相同的前提下，尽量减少废料面积。</li>
+          <li>原片清单支持多种尺寸，每种可分别设置数量。</li>
+          <li>优先减少实际使用的原片数量，在此前提下再尽量减少废料面积。</li>
+          <li>如果某种原片不够，系统会自动尝试其他可用的原片规格。</li>
           <li>每块原片都可以在结果区单独切换是否允许旋转。</li>
-          <li>当前采用启发式二维排样，适合快速给出合理方案。</li>
         </ul>
 
         <div class="overview-grid">
@@ -479,22 +719,22 @@ const solveError = computed(() => solveState.value.error);
             <strong>{{ pieceResult.totalQuantity }} 件</strong>
           </article>
           <article class="overview-card">
-            <span>原片尺寸</span>
-            <strong>{{ formatSize(form.stockWidth, form.stockHeight) }} cm</strong>
+            <span>原片规格</span>
+            <strong>{{ stockResult.stocks.length }} 种</strong>
           </article>
           <article class="overview-card">
-            <span>原片限制</span>
-            <strong>{{ form.maxSheetsText.trim() || "不限" }}</strong>
+            <span>可用原片总数</span>
+            <strong>{{ stockResult.totalQuantity }} 块</strong>
           </article>
         </div>
 
-        <div v-if="pieceResult.errors.length > 0 || stockValidationMessage || maxSheetsValidationMessage || solveError" class="message message-error">
+        <div v-if="pieceResult.errors.length > 0 || stockResult.errors.length > 0 || maxSheetsValidationMessage || solveError" class="message message-error">
           <h3>输入还需要调整</h3>
           <ul>
             <li v-for="error in pieceResult.errors" :key="error">{{ error }}</li>
-            <li v-if="stockValidationMessage">{{ stockValidationMessage }}</li>
+            <li v-for="error in stockResult.errors" :key="`stock-${error}`">{{ error }}</li>
             <li v-if="maxSheetsValidationMessage">{{ maxSheetsValidationMessage }}</li>
-            <li v-if="solveError && !pieceResult.errors.length && !stockValidationMessage && !maxSheetsValidationMessage">{{ solveError }}</li>
+            <li v-if="solveError && !pieceResult.errors.length && !stockResult.errors.length && !maxSheetsValidationMessage">{{ solveError }}</li>
           </ul>
         </div>
 
@@ -526,8 +766,11 @@ const solveError = computed(() => solveState.value.error);
             <tr>
               <th>规格</th>
               <th>数量</th>
+              <th>已切割数</th>
+              <th>未切割数</th>
               <th>单件面积 (cm2)</th>
               <th>来源行</th>
+              <th>切自原片</th>
             </tr>
           </thead>
           <tbody>
@@ -542,8 +785,11 @@ const solveError = computed(() => solveState.value.error);
                 </div>
               </td>
               <td>{{ piece.quantity }}</td>
+              <td>{{ piecePlacedCountText(piece.id) }}</td>
+              <td>{{ pieceUnplacedCountText(piece.id) }}</td>
               <td>{{ formatArea(piece.area) }}</td>
               <td>{{ piece.lineNumbers.join(", ") }}</td>
+              <td>{{ pieceSheetSourceText(piece.id) }}</td>
             </tr>
           </tbody>
         </table>
@@ -557,7 +803,7 @@ const solveError = computed(() => solveState.value.error);
       </div>
 
       <div v-if="!plan" class="empty-state">
-        录入完原片和成品清单后，这里会显示每块原片的利用率、摆放位置和切割明细。
+        录入完原片清单和成品清单后，这里会显示每块原片的利用率、摆放位置和切割明细。
       </div>
 
       <div v-else-if="plan.sheets.length === 0" class="empty-state">
@@ -569,7 +815,7 @@ const solveError = computed(() => solveState.value.error);
           <header>
             <div class="sheet-header-main">
               <h3>原片 {{ sheet.index + 1 }}</h3>
-              <p>切换旋转后会立即重新计算当前方案</p>
+              <p>规格 {{ formatSize(sheet.width, sheet.height) }}，切换旋转后会立即重新计算当前方案</p>
             </div>
             <div class="sheet-header-actions">
               <button
@@ -593,6 +839,25 @@ const solveError = computed(() => solveState.value.error);
 
           <div class="layout-frame">
             <div class="layout-canvas" :style="{ aspectRatio: `${sheet.width} / ${sheet.height}` }">
+              <div
+                v-for="(freeRect, freeRectIndex) in sheet.freeRects"
+                :key="`${sheet.index}-leftover-${freeRectIndex}`"
+                class="leftover-block"
+                :style="freeRectStyle(sheet, freeRect)"
+              >
+                <span class="leftover-dimension leftover-dimension-top">
+                  {{ formatNumber(freeRect.width) }}
+                </span>
+                <span class="leftover-dimension leftover-dimension-bottom">
+                  {{ formatNumber(freeRect.width) }}
+                </span>
+                <span class="leftover-dimension leftover-dimension-left">
+                  {{ formatNumber(freeRect.height) }}
+                </span>
+                <span class="leftover-dimension leftover-dimension-right">
+                  {{ formatNumber(freeRect.height) }}
+                </span>
+              </div>
               <div
                 v-for="placement in sheet.placements"
                 :key="placement.instanceId"
@@ -636,6 +901,7 @@ const solveError = computed(() => solveState.value.error);
     </section>
   </main>
 </template>
+
 
 
 
