@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import {
   solveCuttingPlan,
   type FreeRect,
@@ -90,13 +90,45 @@ const authPassword = ref("");
 const authError = ref("");
 const authReady = ref(false);
 const isAuthenticated = ref(false);
+const fullscreenSheetIndex = ref<number | null>(null);
+
+function setDocumentScrollLocked(locked: boolean): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.body.style.overflow = locked ? "hidden" : "";
+}
+
+function openSheetFullscreen(index: number): void {
+  fullscreenSheetIndex.value = index;
+}
+
+function closeSheetFullscreen(): void {
+  fullscreenSheetIndex.value = null;
+}
+
+function handleWindowKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    closeSheetFullscreen();
+  }
+}
 
 onMounted(() => {
   if (typeof window !== "undefined") {
     isAuthenticated.value = window.localStorage.getItem(AUTH_STORAGE_KEY) === AUTH_STORAGE_VALUE;
+    window.addEventListener("keydown", handleWindowKeydown);
   }
 
   authReady.value = true;
+});
+
+onBeforeUnmount(() => {
+  if (typeof window !== "undefined") {
+    window.removeEventListener("keydown", handleWindowKeydown);
+  }
+
+  setDocumentScrollLocked(false);
 });
 
 function submitLogin(): void {
@@ -304,6 +336,18 @@ function freeRectStyle(sheet: SheetLayout, freeRect: FreeRect) {
     top: `${(freeRect.y / sheet.height) * 100}%`,
     width: `${(freeRect.width / sheet.width) * 100}%`,
     height: `${(freeRect.height / sheet.height) * 100}%`
+  };
+}
+
+function sheetCanvasStyle(sheet: SheetLayout) {
+  return {
+    aspectRatio: `${sheet.width} / ${sheet.height}`
+  };
+}
+
+function fullscreenFrameStyle(sheet: SheetLayout) {
+  return {
+    "--sheet-ratio": String(sheet.width / sheet.height)
   };
 }
 
@@ -517,6 +561,21 @@ const solveState = computed(() => {
 
 const plan = computed(() => solveState.value.plan);
 const solveError = computed(() => solveState.value.error);
+const fullscreenSheet = computed(() => {
+  if (!plan.value || fullscreenSheetIndex.value === null) {
+    return null;
+  }
+
+  return plan.value.sheets.find((sheet) => sheet.index === fullscreenSheetIndex.value) ?? null;
+});
+
+watch(
+  fullscreenSheet,
+  (sheet) => {
+    setDocumentScrollLocked(Boolean(sheet));
+  },
+  { immediate: true }
+);
 
 const piecePlacementMetaById = computed(() => {
   const placedCounts = new Map<string, number>();
@@ -959,6 +1018,13 @@ function stockFullyUsed(index: number): boolean {
             <div class="sheet-header-actions">
               <button
                 type="button"
+                class="button button-ghost button-inline sheet-fullscreen-toggle"
+                @click="openSheetFullscreen(sheet.index)"
+              >
+                全屏查看
+              </button>
+              <button
+                type="button"
                 class="sheet-rotation-toggle"
                 :class="{ 'sheet-rotation-toggle-off': !sheetRotationEnabled(sheet.index) }"
                 @click="toggleSheetRotation(sheet.index)"
@@ -977,7 +1043,7 @@ function stockFullyUsed(index: number): boolean {
           </div>
 
           <div class="layout-frame">
-            <div class="layout-canvas" :style="{ aspectRatio: `${sheet.width} / ${sheet.height}` }">
+            <div class="layout-canvas" :style="sheetCanvasStyle(sheet)">
               <div
                 v-for="(freeRect, freeRectIndex) in sheet.freeRects"
                 :key="`${sheet.index}-leftover-${freeRectIndex}`"
@@ -1045,6 +1111,74 @@ function stockFullyUsed(index: number): boolean {
         </article>
       </div>
     </section>
+
+    <div
+      v-if="fullscreenSheet"
+      class="sheet-fullscreen-overlay"
+      @click.self="closeSheetFullscreen"
+    >
+      <section class="sheet-fullscreen-dialog">
+        <div class="sheet-fullscreen-toolbar">
+          <div class="sheet-fullscreen-title">
+            <p>原片 {{ fullscreenSheet.index + 1 }}</p>
+            <h2>{{ formatSize(fullscreenSheet.width, fullscreenSheet.height) }}</h2>
+          </div>
+          <button
+            type="button"
+            class="button button-inline sheet-fullscreen-close"
+            @click="closeSheetFullscreen"
+          >
+            关闭
+          </button>
+        </div>
+
+        <div class="sheet-fullscreen-stats">
+          <span>利用率 {{ formatPercent(fullscreenSheet.utilization) }}</span>
+          <span>已用 {{ formatArea(fullscreenSheet.placedArea) }}</span>
+          <span>废料 {{ formatArea(fullscreenSheet.wasteArea) }}</span>
+        </div>
+
+        <div class="sheet-fullscreen-view">
+          <div class="layout-frame layout-frame-fullscreen" :style="fullscreenFrameStyle(fullscreenSheet)">
+            <div class="layout-canvas layout-canvas-fullscreen" :style="sheetCanvasStyle(fullscreenSheet)">
+              <div
+                v-for="(freeRect, freeRectIndex) in fullscreenSheet.freeRects"
+                :key="`fullscreen-${fullscreenSheet.index}-leftover-${freeRectIndex}`"
+                class="leftover-block"
+                :style="freeRectStyle(fullscreenSheet, freeRect)"
+              >
+                <span class="leftover-dimension leftover-dimension-top">
+                  {{ formatNumber(freeRect.width) }}
+                </span>
+                <span class="leftover-dimension leftover-dimension-bottom">
+                  {{ formatNumber(freeRect.width) }}
+                </span>
+                <span class="leftover-dimension leftover-dimension-left">
+                  {{ formatNumber(freeRect.height) }}
+                </span>
+                <span class="leftover-dimension leftover-dimension-right">
+                  {{ formatNumber(freeRect.height) }}
+                </span>
+              </div>
+              <div
+                v-for="placement in fullscreenSheet.placements"
+                :key="`fullscreen-${placement.instanceId}`"
+                class="placement-block"
+                :style="placementStyle(fullscreenSheet, placement)"
+              >
+                <span class="placement-dimension placement-dimension-horizontal">
+                  {{ formatNumber(placement.width) }}
+                </span>
+                <span class="placement-dimension placement-dimension-vertical">
+                  {{ formatNumber(placement.height) }}
+                </span>
+                <strong class="placement-label">{{ placement.pieceId }}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 
