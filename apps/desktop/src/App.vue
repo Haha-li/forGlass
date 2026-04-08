@@ -796,7 +796,7 @@ function stockFullyUsed(index: number): boolean {
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel panel-results">
       <div class="panel-heading">
         <h2>切割结果</h2>
         <span>每块原片单独切换旋转</span>
