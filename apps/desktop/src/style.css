@@ -388,32 +388,43 @@ h3 {
   border: none;
   border-radius: 0;
   padding: 11px 18px;
-  background: linear-gradient(135deg, #1d6c7f 0%, #2492aa 100%);
+  background: #1f839c;
   color: #fff;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: 0 12px 24px rgba(36, 146, 170, 0.22);
+  box-shadow: 0 10px 18px rgba(25, 120, 142, 0.2);
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease,
-    opacity 0.18s ease;
+    opacity 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(36, 146, 170, 0.28);
+  background: #176f86;
+  box-shadow: 0 12px 22px rgba(25, 120, 142, 0.24);
+}
+
+.button:focus-visible,
+.sheet-rotation-toggle:focus-visible {
+  outline: 2px solid rgba(38, 163, 191, 0.34);
+  outline-offset: 2px;
 }
 
 .button-ghost {
-  background: rgba(18, 64, 82, 0.08);
-  color: #244857;
-  box-shadow: none;
+  border: 1px solid #8ebfca;
+  background: #dceff3;
+  color: #165e72;
+  box-shadow: 0 8px 16px rgba(23, 111, 134, 0.12);
 }
 
 .button-ghost:hover {
-  box-shadow: none;
-  background: rgba(18, 64, 82, 0.12);
+  box-shadow: 0 10px 18px rgba(23, 111, 134, 0.16);
+  background: #cfe7ed;
 }
 
 .button-inline {
@@ -618,41 +629,49 @@ h3 {
 }
 
 .sheet-rotation-toggle {
-  border: 1px solid rgba(29, 108, 127, 0.2);
+  border: 1px solid #1c6f86;
   border-radius: 0;
   padding: 8px 12px;
-  background: rgba(29, 108, 127, 0.1);
-  color: #1d6c7f;
+  background: #238ca6;
+  color: #fff;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 8px 16px rgba(25, 120, 142, 0.18);
   transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
     background-color 0.18s ease,
     border-color 0.18s ease,
     color 0.18s ease;
 }
 
 .sheet-rotation-toggle:hover {
-  background: rgba(29, 108, 127, 0.16);
-  border-color: rgba(29, 108, 127, 0.3);
+  transform: translateY(-1px);
+  background: #1d7a91;
+  box-shadow: 0 10px 18px rgba(25, 120, 142, 0.22);
+  border-color: #175e72;
 }
 
 .sheet-rotation-toggle-off {
-  background: rgba(186, 76, 59, 0.1);
-  border-color: rgba(186, 76, 59, 0.24);
-  color: #8f4336;
+  background: #c45d4d;
+  border-color: #a84d40;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(182, 77, 62, 0.18);
 }
 
 .sheet-rotation-toggle-off:hover {
-  background: rgba(186, 76, 59, 0.16);
-  border-color: rgba(186, 76, 59, 0.32);
+  background: #b65141;
+  box-shadow: 0 10px 18px rgba(182, 77, 62, 0.22);
+  border-color: #934236;
 }
 
 .sheet-fullscreen-toggle {
-  border: 1px solid rgba(29, 108, 127, 0.16);
+  border-color: #8ebfca;
+  color: #165e72;
 }
 
 .sheet-fullscreen-toggle:hover {
-  border-color: rgba(29, 108, 127, 0.28);
+  border-color: #6eaab8;
 }
 
 .sheet-stats {
@@ -745,7 +764,8 @@ h3 {
 
 .sheet-fullscreen-close {
   flex: none;
-  box-shadow: none;
+  background: #1b738a;
+  box-shadow: 0 8px 16px rgba(20, 94, 115, 0.2);
 }
 
 .sheet-fullscreen-stats {
